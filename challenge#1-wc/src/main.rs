@@ -1,12 +1,19 @@
 use std::fs::File;
-use std::io::Read;
+use std::io::{self, Read};
 
-fn count_bytes<R: Read>(mut reader: R) -> usize {
-    let mut contents = Vec::new();
-    reader
-        .read_to_end(&mut contents)
-        .expect("Unable to read input");
-    contents.len()
+fn count_bytes<R: Read>(mut reader: R) -> io::Result<usize> {
+    let mut buffer = [0; 8192]; // 8KB buffer
+    let mut byte_count = 0;
+
+    loop {
+        let bytes_read = reader.read(&mut buffer)?;
+        if bytes_read == 0 {
+            break; // end of file
+        }
+        byte_count += bytes_read;
+    }
+
+    Ok(byte_count)
 }
 
 fn main() {
@@ -14,11 +21,13 @@ fn main() {
 
     if args.len() == 3 && args[1] == "-c" {
         let filename = &args[2];
-        let file = File::open(filename).expect("Unable to open file");
-        let byte_count = count_bytes(file);
-        println!("{:>8} {}", byte_count, filename);
-    } else {
-        eprintln!("Usage: {} -c <filename>", args[0]);
+        match File::open(filename) {
+            Ok(file) => match count_bytes(file) {
+                Ok(byte_count) => println!("{:>8} {}", byte_count, filename),
+                Err(e) => eprintln!("Error reading file {}: {}", filename, e),
+            },
+            Err(e) => eprintln!("Error reading file {}: {}", filename, e),
+        }
     }
 }
 
@@ -29,7 +38,7 @@ mod tests {
     #[test]
     fn test_byte_count() {
         let test_data = b"Hello, world!";
-        let byte_count = count_bytes(&test_data[..]);
+        let byte_count = count_bytes(&test_data[..]).unwrap();
         assert_eq!(byte_count, test_data.len());
     }
 }
